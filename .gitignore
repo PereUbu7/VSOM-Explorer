@@ -1,0 +1,11 @@
+/*
+!/build
+!/apps
+!/docs
+!/external
+!/include
+!/src
+!/tests
+!.gitignore
+!README.md
+!LICENCE

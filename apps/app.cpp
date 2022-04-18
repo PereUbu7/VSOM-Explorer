@@ -120,8 +120,10 @@ int main(int, char **)
     dataset.loadDataBase(&dbConnection);
 
     auto som = Som(100, 100, dataset.vectorLength());
-
-
+    som.randomInitialize(1, 1);
+    som.train(&dataset, 1000, 0.99, 0.01, 50, 0.01, 0);
+    som.updateUMatrix(dataset.getWeights());
+    
     // Main loop
     bool done = false;
     while (!done)

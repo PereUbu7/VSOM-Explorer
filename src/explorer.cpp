@@ -1,6 +1,7 @@
 #include "explorer.h"
 
 #include <cstdio>
+#include <iostream>
 
 namespace VSOMExplorer
 {
@@ -42,9 +43,9 @@ namespace VSOMExplorer
         }
     }
 
-    static void DatasetViewer(const DataSet& dataset)
+    static void DatasetViewer(const DataSet &dataset)
     {
-        if(ImGui::Begin("Dataset"))
+        if (ImGui::Begin("Dataset"))
         {
             // Expose a few Borders related flags interactively
             static ImGuiTableFlags flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
@@ -58,7 +59,7 @@ namespace VSOMExplorer
                 // (Headers are not the main purpose of this section of the demo, so we are not elaborating on them too much. See other sections for details)
                 if (display_headers)
                 {
-                    for(size_t columnIndex{0}; columnIndex<numberOfColumns;++columnIndex)
+                    for (size_t columnIndex{0}; columnIndex < numberOfColumns; ++columnIndex)
                         ImGui::TableSetupColumn(dataset.getName(columnIndex).c_str());
                     ImGui::TableHeadersRow();
                 }
@@ -73,7 +74,6 @@ namespace VSOMExplorer
                         auto columnValue = rowValues[column];
                         auto textValue = std::to_string(columnValue);
                         ImGui::TextUnformatted(textValue.c_str());
-
                     }
                 }
                 ImGui::EndTable();
@@ -82,16 +82,48 @@ namespace VSOMExplorer
         }
     }
 
-    static void RenderUMatrix(const Som& som)
+    static void RenderUMatrix(const UMatrix &uMatrix)
     {
-        if(ImGui::Begin("U-matrix"))
+        if (ImGui::Begin("U-matrix"))
         {
-            
+            auto xSteps = uMatrix.getWidth();
+            auto ySteps = uMatrix.getHeight();
+            auto xStepSize = ImGui::GetWindowWidth() / xSteps;
+            auto yStepSize = ImGui::GetWindowHeight() / ySteps;
+
+            auto maxValue = uMatrix.getMaxValue();
+            auto minValue = uMatrix.getMinValue();
+
+            ImDrawList *draw_list = ImGui::GetWindowDrawList();
+
+            static float upper = 255.0f;
+            static float lower = 0.0f;
+            ImGui::DragFloat("Upper", &upper, 0.2f, 0.0f, 255.0f, "%.0f");
+            ImGui::DragFloat("Lower", &lower, 0.2f, 0.0f, 255.0f, "%.0f");
+
+            const ImVec2 p = ImGui::GetCursorScreenPos();
+
+            for (size_t yIndex{0}; yIndex < ySteps; ++yIndex)
+            {
+                for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
+                {
+                    auto unscaledValue = uMatrix.getValueAtIndex(xIndex, yIndex);
+                    auto staticallyScaledValue = 255.0/maxValue*unscaledValue;
+                    auto span = upper - lower;
+                    auto dynamicallyScaledValue = (staticallyScaledValue - lower)*255.0/span;
+                    auto contrainedValue = dynamicallyScaledValue < 0 ? 0 :
+                        dynamicallyScaledValue > 255.0 ? 255.0 : dynamicallyScaledValue;
+                    auto value = static_cast<int>(contrainedValue);
+                    // std::cout << "Value is:" << value << '\n';
+                    draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex*xStepSize, p.y + yIndex*yStepSize), 
+                        ImVec2(p.x + (xIndex+1)*xStepSize, p.y + (yIndex+1)*yStepSize), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255));
+                }
+            }
             ImGui::End();
         }
     }
 
-    void RenderExplorer(const Som& som, const DataSet& dataset)
+    void RenderExplorer(const Som &som, const DataSet &dataset)
     {
         ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 
@@ -99,6 +131,6 @@ namespace VSOMExplorer
 
         DatasetViewer(dataset);
 
-        RenderUMatrix(som);
+        RenderUMatrix(som.getUMatrix());
     }
 }

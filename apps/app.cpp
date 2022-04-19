@@ -107,8 +107,6 @@ int main(int, char **)
     // IM_ASSERT(font != NULL);
 
     // Our state
-    bool show_demo_window = true;
-    bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Load VSOM dataset
@@ -120,8 +118,8 @@ int main(int, char **)
     dataset.loadDataBase(&dbConnection);
 
     auto som = Som(100, 100, dataset.vectorLength());
-    som.randomInitialize(1, 1);
-    som.train(&dataset, 1000, 0.99, 0.01, 50, 0.01, 0);
+    som.randomInitialize((unsigned)(time(NULL)+clock()), 1);
+    som.train(&dataset, 200, 0.99, 0.01, 50, 0.01, 0);
     som.updateUMatrix(dataset.getWeights());
     
     // Main loop

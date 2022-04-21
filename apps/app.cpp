@@ -119,8 +119,6 @@ int main(int, char **)
 
     auto som = Som(100, 100, dataset.vectorLength());
     som.randomInitialize((unsigned)(time(NULL)+clock()), 1);
-    som.train(&dataset, 200, 0.99, 0.01, 50, 0.01, 0);
-    som.updateUMatrix(dataset.getWeights());
     
     // Main loop
     bool done = false;

@@ -2,6 +2,8 @@
 
 #include <cstdio>
 #include <iostream>
+#include <thread>
+#include <functional>
 
 namespace VSOMExplorer
 {
@@ -221,11 +223,42 @@ namespace VSOMExplorer
         }
     }
 
-    void RenderExplorer(const Som &som, const DataSet &dataset)
+    void SomHandler(Som &som, DataSet &dataset)
+    {
+        static std::thread trainingThread;
+        auto currentlyTraining = som.isTraining();
+        if (ImGui::Begin("SOM"))
+        {
+            if(currentlyTraining) ImGui::BeginDisabled(true);
+            {
+                
+                if (ImGui::Button("Train"))
+                {
+                    trainingThread = std::thread(&Som::train, std::ref(som), std::ref(dataset), 400, 0.9, 0.01, 50.0, 0.01, Som::WeigthDecayFunction::Exponential, true);
+                    trainingThread.detach();
+                }
+                if (currentlyTraining)
+                {
+                    ImGui::SameLine();
+                    ImGui::Text("Training SOM...");
+                }
+                
+                if(ImGui::Button("Randomly initialize")) som.randomInitialize((unsigned)(time(NULL)+clock()), 1);
+            }
+            if(currentlyTraining) ImGui::EndDisabled();
+
+
+            ImGui::End();
+        }
+    }
+
+    void RenderExplorer(Som &som, DataSet &dataset)
     {
         ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 
         LoadMainMenu();
+
+        SomHandler(som, dataset);
 
         DatasetViewer(dataset);
 

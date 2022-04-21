@@ -6,5 +6,5 @@
 
 namespace VSOMExplorer
 {
-    void RenderExplorer(const Som& som, const DataSet& dataset);
+    void RenderExplorer(Som& som, DataSet& dataset);
 }

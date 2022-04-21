@@ -28,8 +28,8 @@ OBJS = $(addsuffix .o, $(basename $(notdir $(SOURCES))))
 UNAME_S := $(shell uname -s)
 LINUX_GL_LIBS = -lGL
 
-CXXFLAGS = -std=c++11 -I$(EXTERNAL_DIR) -I$(EXTERNAL_DIR)/backends -I$(IMGUI_DIR) -I$(INCLUDE_DIR)
-CXXFLAGS += -g -Wall -Wformat -lsom
+CXXFLAGS = -std=c++20 -I$(EXTERNAL_DIR) -I$(EXTERNAL_DIR)/backends -I$(IMGUI_DIR) -I$(INCLUDE_DIR)
+CXXFLAGS += -g -Wall -Wformat -lsom -lpthread
 LIBS =
 
 ##---------------------------------------------------------------------

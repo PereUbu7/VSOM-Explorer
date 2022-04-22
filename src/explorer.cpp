@@ -231,10 +231,38 @@ namespace VSOMExplorer
         {
             if(currentlyTraining) ImGui::BeginDisabled(true);
             {
+                static int width = som.getWidth();
+                static int height = som.getHeight();
+                ImGui::Text("SOM");
+                ImGui::InputInt("Width", &width);
+                ImGui::InputInt("Height", &height);
+                if (ImGui::Button("Create"))
+                    som = Som(width, height, dataset.vectorLength());
+                static float initSigma = 1.0f;
+                ImGui::InputFloat("Init variance", &initSigma);
+                if(ImGui::Button("Randomly initialize")) som.randomInitialize((unsigned)(time(NULL)+clock()), initSigma);
                 
+                static int numberOfEpochs = 100;
+                static double eta0 = 0.9;
+                static double etaDecay = 0.01;
+                static double sigma0 = 10;
+                static double sigmaDecay = 0.01;
+                static Som::WeigthDecayFunction wdf = Som::WeigthDecayFunction::Exponential;
+
+                // ImGui::InputInt("Number of epochs", numberOfEpochs);
+                ImGui::SliderInt("Number of epochs", &numberOfEpochs, 1, 1000);
+                ImGui::InputDouble("Eta0", &eta0);
+                ImGui::InputDouble("Eta decay", &etaDecay);
+                ImGui::InputDouble("Sigma0", &sigma0);
+                ImGui::InputDouble("Sigma decay", &sigmaDecay);
+                // #include <type_traits>
+                static int elem = static_cast<std::underlying_type_t<Som::WeigthDecayFunction>>(Som::WeigthDecayFunction::Exponential);
+                const char* elems_names[2] = { "Exponential", "Inverse proportional" };
+                const char* elem_name = (elem >= 0 && elem < 2) ? elems_names[elem] : "Unknown";
+                ImGui::SliderInt("Weight decay function", &elem, 0, 1, elem_name);
                 if (ImGui::Button("Train"))
                 {
-                    trainingThread = std::thread(&Som::train, std::ref(som), std::ref(dataset), 400, 0.9, 0.01, 50.0, 0.01, Som::WeigthDecayFunction::Exponential, true);
+                    trainingThread = std::thread(&Som::train, std::ref(som), std::ref(dataset), static_cast<size_t>(numberOfEpochs), eta0, etaDecay, sigma0, sigmaDecay, static_cast<Som::WeigthDecayFunction>(elem), true);
                     trainingThread.detach();
                 }
                 if (currentlyTraining)
@@ -243,7 +271,6 @@ namespace VSOMExplorer
                     ImGui::Text("Training SOM...");
                 }
                 
-                if(ImGui::Button("Randomly initialize")) som.randomInitialize((unsigned)(time(NULL)+clock()), 1);
             }
             if(currentlyTraining) ImGui::EndDisabled();
 

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <thread>
 #include <functional>
+#include <algorithm>
 
 namespace VSOMExplorer
 {
@@ -110,8 +111,8 @@ namespace VSOMExplorer
                 }
                 ImGui::EndTable();
             }
-            ImGui::End();
         }
+        ImGui::End();
     }
 
     static void RenderUMatrix(const UMatrix &uMatrix)
@@ -150,8 +151,90 @@ namespace VSOMExplorer
                                                        ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255));
                 }
             }
-            ImGui::End();
         }
+        ImGui::End();
+    }
+
+    static void RenderWeigthMap(const Som &som)
+    {
+        if (ImGui::Begin("Weight Map"))
+        {
+            auto xSteps = som.getWidth();
+            auto ySteps = som.getHeight();
+            auto xStepSize = ImGui::GetWindowWidth() / xSteps;
+            auto yStepSize = ImGui::GetWindowHeight() / ySteps;
+
+            auto weightMap = som.getWeigthMap();
+            auto maxValue = weightMap.maxCoeff();
+
+            ImDrawList *draw_list = ImGui::GetWindowDrawList();
+
+            static float upper = 255.0f;
+            static float lower = 0.0f;
+            ImGui::DragFloat("Upper", &upper, 0.2f, 0.0f, 255.0f, "%.0f");
+            ImGui::DragFloat("Lower", &lower, 0.2f, 0.0f, 255.0f, "%.0f");
+
+            const ImVec2 p = ImGui::GetCursorScreenPos();
+
+            for (size_t yIndex{0}; yIndex < ySteps; ++yIndex)
+            {
+                for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
+                {
+                    auto unscaledValue = weightMap[yIndex*xSteps + xIndex];
+                    auto staticallyScaledValue = 255.0 / maxValue * unscaledValue;
+                    auto span = upper - lower;
+                    auto dynamicallyScaledValue = (staticallyScaledValue - lower) * 255.0 / span;
+                    auto contrainedValue = dynamicallyScaledValue < 0 ? 0 : dynamicallyScaledValue > 255.0 ? 255.0
+                                                                                                           : dynamicallyScaledValue;
+                    auto value = static_cast<int>(contrainedValue);
+                    
+                    draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
+                                                       ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255));
+                }
+            }
+        }
+        ImGui::End();
+    }
+
+    static void RenderBmuHits(const Som &som)
+    {
+        if (ImGui::Begin("BMU Hits"))
+        {
+            auto xSteps = som.getWidth();
+            auto ySteps = som.getHeight();
+            auto xStepSize = ImGui::GetWindowWidth() / xSteps;
+            auto yStepSize = ImGui::GetWindowHeight() / ySteps;
+
+            auto bmuHits = som.getBmuHits();
+            auto maxValue = *std::max_element(bmuHits.begin(), bmuHits.end());
+
+            ImDrawList *draw_list = ImGui::GetWindowDrawList();
+
+            static float upper = 255.0f;
+            static float lower = 0.0f;
+            ImGui::DragFloat("Upper", &upper, 0.2f, 0.0f, 255.0f, "%.0f");
+            ImGui::DragFloat("Lower", &lower, 0.2f, 0.0f, 255.0f, "%.0f");
+
+            const ImVec2 p = ImGui::GetCursorScreenPos();
+
+            for (size_t yIndex{0}; yIndex < ySteps; ++yIndex)
+            {
+                for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
+                {
+                    auto unscaledValue = bmuHits[yIndex*xSteps + xIndex];
+                    auto staticallyScaledValue = 255.0 / maxValue * unscaledValue;
+                    auto span = upper - lower;
+                    auto dynamicallyScaledValue = (staticallyScaledValue - lower) * 255.0 / span;
+                    auto contrainedValue = dynamicallyScaledValue < 0 ? 0 : dynamicallyScaledValue > 255.0 ? 255.0
+                                                                                                           : dynamicallyScaledValue;
+                    auto value = static_cast<int>(contrainedValue);
+                    
+                    draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
+                                                       ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255));
+                }
+            }
+        }
+        ImGui::End();
     }
 
     static void RenderMap(const Som &som, const DataSet &dataset)
@@ -219,8 +302,77 @@ namespace VSOMExplorer
                 }
             }
 
-            ImGui::End();
         }
+        ImGui::End();
+    }
+
+    static void RenderSigmaMap(const Som &som, const DataSet &dataset)
+    {
+        if (ImGui::Begin("Sigma Map"))
+        {
+            auto featureNames = dataset.getNames();
+            // featureNames.push_back("None");
+            const auto noneIndex = featureNames.size() - 1;
+
+            static size_t currentRedColumnId = noneIndex;
+            static size_t currentGreenColumnId = noneIndex;
+            static size_t currentBlueColumnId = noneIndex;
+            
+            RenderCombo("Red Value", featureNames, &currentRedColumnId, dataset.getName(currentRedColumnId));
+            RenderCombo("Green Value", featureNames, &currentGreenColumnId, dataset.getName(currentGreenColumnId));
+            RenderCombo("Blue Value", featureNames, &currentBlueColumnId, dataset.getName(currentBlueColumnId));
+            
+            auto xSteps = som.getWidth();
+            auto ySteps = som.getHeight();
+            auto xStepSize = ImGui::GetWindowWidth() / xSteps;
+            auto yStepSize = ImGui::GetWindowHeight() / ySteps;
+
+            auto maxRedValue = som.getMaxSigmaOfFeature(currentRedColumnId);
+            auto minRedValue = som.getMinSigmaOfFeature(currentRedColumnId);
+            auto maxGreenValue = som.getMaxSigmaOfFeature(currentGreenColumnId);
+            auto minGreenValue = som.getMinSigmaOfFeature(currentGreenColumnId);
+            auto maxBlueValue = som.getMaxSigmaOfFeature(currentBlueColumnId);
+            auto minBlueValue = som.getMinSigmaOfFeature(currentBlueColumnId);
+
+            ImDrawList *draw_list = ImGui::GetWindowDrawList();
+
+            const ImVec2 p = ImGui::GetCursorScreenPos();
+
+            for (size_t yIndex{0}; yIndex < ySteps; ++yIndex)
+            {
+                for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
+                {
+                    auto modelVector = som.getSigmaNeuron(SomIndex{xIndex, yIndex});
+
+                    auto redValue = modelVector[currentRedColumnId];
+                    auto greenValue = modelVector[currentGreenColumnId];
+                    auto blueValue = modelVector[currentBlueColumnId];
+                    
+                    auto staticallyScaledRedValue = (redValue - minRedValue)*255/(maxRedValue - minRedValue)*redValue;
+                    auto staticallyScaledGreenValue = (greenValue - minGreenValue)*255/(maxGreenValue - minGreenValue)*greenValue;
+                    auto staticallyScaledBlueValue = (blueValue - minBlueValue)*255/(maxBlueValue - minBlueValue)*blueValue;
+
+                    auto constrainedRedValue = static_cast<int>(staticallyScaledRedValue > 255.0 ? 255.0 :
+                        staticallyScaledRedValue < 0.0 ? 0.0 : 
+                        staticallyScaledRedValue);
+                    auto constrainedGreenValue = static_cast<int>(staticallyScaledGreenValue > 255.0 ? 255.0 :
+                        staticallyScaledGreenValue < 0.0 ? 0.0 : 
+                        staticallyScaledGreenValue);
+                    auto constrainedBlueValue = static_cast<int>(staticallyScaledBlueValue > 255.0 ? 255.0 :
+                        staticallyScaledBlueValue < 0.0 ? 0.0 : 
+                        staticallyScaledBlueValue);
+
+                    draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
+                                                       ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), 
+                                                       IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
+                                                       IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
+                                                       IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
+                                                       IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255));
+                }
+            }
+
+        }
+        ImGui::End();
     }
 
     void SomHandler(Som &som, DataSet &dataset)
@@ -275,8 +427,23 @@ namespace VSOMExplorer
             if(currentlyTraining) ImGui::EndDisabled();
 
 
-            ImGui::End();
         }
+        ImGui::End();
+    }
+
+    void MetricsViewer(Som &som)
+    {
+        if (ImGui::Begin("Metrics"))
+        {
+            {
+                const std::lock_guard<std::mutex> lock(som.metricsMutex);
+                auto metrics = som.getMetrics();
+                auto maxValue = std::max_element(metrics.MeanSquaredError.begin(), metrics.MeanSquaredError.end());
+                ImGui::PlotLines("Mean Squared Training Error", metrics.MeanSquaredError.data(), metrics.MeanSquaredError.size(), 0, nullptr, 0.0f, *maxValue, ImVec2(0, 80.0f));
+            }
+
+        }
+        ImGui::End();
     }
 
     void RenderExplorer(Som &som, DataSet &dataset)
@@ -290,7 +457,12 @@ namespace VSOMExplorer
         DatasetViewer(dataset);
 
         RenderUMatrix(som.getUMatrix());
+        RenderWeigthMap(som);
+        RenderBmuHits(som);
+
+        MetricsViewer(som);
 
         RenderMap(som, dataset);
+        RenderSigmaMap(som, dataset);
     }
 }

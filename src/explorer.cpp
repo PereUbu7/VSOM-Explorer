@@ -402,16 +402,21 @@ namespace VSOMExplorer
                 static Som::WeigthDecayFunction wdf = Som::WeigthDecayFunction::Exponential;
 
                 // ImGui::InputInt("Number of epochs", numberOfEpochs);
+                static int elem = static_cast<std::underlying_type_t<Som::WeigthDecayFunction>>(Som::WeigthDecayFunction::Exponential);
+                const char* elems_names[3] = { "Exponential", "Inverse proportional", "Batch Map" };
+                const char* elem_name = (elem >= 0 && elem < 3) ? elems_names[elem] : "Unknown";
+                ImGui::SliderInt("Weight decay function", &elem, 0, 2, elem_name);
+
                 ImGui::SliderInt("Number of epochs", &numberOfEpochs, 1, 1000);
-                ImGui::InputDouble("Eta0", &eta0);
-                ImGui::InputDouble("Eta decay", &etaDecay);
+                if (elem == 0)
+                {
+                    ImGui::InputDouble("Eta0", &eta0);
+                    ImGui::InputDouble("Eta decay", &etaDecay);
+                }
                 ImGui::InputDouble("Sigma0", &sigma0);
                 ImGui::InputDouble("Sigma decay", &sigmaDecay);
                 // #include <type_traits>
-                static int elem = static_cast<std::underlying_type_t<Som::WeigthDecayFunction>>(Som::WeigthDecayFunction::Exponential);
-                const char* elems_names[2] = { "Exponential", "Inverse proportional" };
-                const char* elem_name = (elem >= 0 && elem < 2) ? elems_names[elem] : "Unknown";
-                ImGui::SliderInt("Weight decay function", &elem, 0, 1, elem_name);
+                
                 if (ImGui::Button("Train"))
                 {
                     trainingThread = std::thread(&Som::train, std::ref(som), std::ref(dataset), static_cast<size_t>(numberOfEpochs), eta0, etaDecay, sigma0, sigmaDecay, static_cast<Som::WeigthDecayFunction>(elem), true);

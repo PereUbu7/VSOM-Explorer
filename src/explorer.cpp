@@ -362,41 +362,68 @@ namespace VSOMExplorer
             auto maxBlueValue = som.getMaxSigmaOfFeature(currentBlueColumnId);
             auto minBlueValue = som.getMinSigmaOfFeature(currentBlueColumnId);
 
-            ImDrawList *draw_list = ImGui::GetWindowDrawList();
+            size_t hoverNeuronX{0}, hoverNeuronY{0};
 
-            const ImVec2 p = ImGui::GetCursorScreenPos();
-
-            for (size_t yIndex{0}; yIndex < ySteps; ++yIndex)
+            if (ImGui::BeginChild("HoverSigmaMap"))
             {
-                for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
+                /* Hover neuron index */
+                hoverNeuronX = static_cast<size_t>((ImGui::GetMousePos().x - ImGui::GetCursorScreenPos().x - ImGui::GetScrollX())/xStepSize);
+                hoverNeuronY = static_cast<size_t>((ImGui::GetMousePos().y - ImGui::GetCursorScreenPos().y - ImGui::GetScrollY())/yStepSize);
+
+                ImDrawList *draw_list = ImGui::GetWindowDrawList();
+
+                const ImVec2 p = ImGui::GetCursorScreenPos();
+
+                for (size_t yIndex{0}; yIndex < ySteps; ++yIndex)
                 {
-                    auto modelVector = som.getSigmaNeuron(SomIndex{xIndex, yIndex});
+                    for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
+                    {
+                        auto modelVector = som.getSigmaNeuron(SomIndex{xIndex, yIndex});
 
-                    auto redValue = modelVector[currentRedColumnId];
-                    auto greenValue = modelVector[currentGreenColumnId];
-                    auto blueValue = modelVector[currentBlueColumnId];
-                    
-                    auto staticallyScaledRedValue = (redValue - minRedValue)*255/(maxRedValue - minRedValue)*redValue;
-                    auto staticallyScaledGreenValue = (greenValue - minGreenValue)*255/(maxGreenValue - minGreenValue)*greenValue;
-                    auto staticallyScaledBlueValue = (blueValue - minBlueValue)*255/(maxBlueValue - minBlueValue)*blueValue;
+                        auto redValue = modelVector[currentRedColumnId];
+                        auto greenValue = modelVector[currentGreenColumnId];
+                        auto blueValue = modelVector[currentBlueColumnId];
 
-                    auto constrainedRedValue = static_cast<int>(staticallyScaledRedValue > 255.0 ? 255.0 :
-                        staticallyScaledRedValue < 0.0 ? 0.0 : 
-                        staticallyScaledRedValue);
-                    auto constrainedGreenValue = static_cast<int>(staticallyScaledGreenValue > 255.0 ? 255.0 :
-                        staticallyScaledGreenValue < 0.0 ? 0.0 : 
-                        staticallyScaledGreenValue);
-                    auto constrainedBlueValue = static_cast<int>(staticallyScaledBlueValue > 255.0 ? 255.0 :
-                        staticallyScaledBlueValue < 0.0 ? 0.0 : 
-                        staticallyScaledBlueValue);
+                        auto staticallyScaledRedValue = (redValue - minRedValue) * 255 / (maxRedValue - minRedValue) * redValue;
+                        auto staticallyScaledGreenValue = (greenValue - minGreenValue) * 255 / (maxGreenValue - minGreenValue) * greenValue;
+                        auto staticallyScaledBlueValue = (blueValue - minBlueValue) * 255 / (maxBlueValue - minBlueValue) * blueValue;
 
-                    draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
-                                                       ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), 
-                                                       IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
-                                                       IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
-                                                       IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
-                                                       IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255));
+                        auto constrainedRedValue = static_cast<int>(staticallyScaledRedValue > 255.0 ? 255.0 : staticallyScaledRedValue < 0.0 ? 0.0
+                                                                                                                                              : staticallyScaledRedValue);
+                        auto constrainedGreenValue = static_cast<int>(staticallyScaledGreenValue > 255.0 ? 255.0 : staticallyScaledGreenValue < 0.0 ? 0.0
+                                                                                                                                                    : staticallyScaledGreenValue);
+                        auto constrainedBlueValue = static_cast<int>(staticallyScaledBlueValue > 255.0 ? 255.0 : staticallyScaledBlueValue < 0.0 ? 0.0
+                                                                                                                                                 : staticallyScaledBlueValue);
+
+                        draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
+                                                           ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize),
+                                                           IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255),
+                                                           IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255),
+                                                           IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255),
+                                                           IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255));
+                    }
                 }
+            }
+            ImGui::EndChild();
+
+            /* Display model vector values in tooltip */
+            if (ImGui::IsItemHovered())
+            {
+                auto index = SomIndex{hoverNeuronX, hoverNeuronY};
+                auto currentNeuron = som.getNeuron(index);
+                auto currentNeuronSigma = som.getSigmaNeuron(index);
+
+                ImGui::BeginTooltip();
+                for(size_t i{0}; i<currentNeuron.size(); ++i)
+                {
+                    auto featureName = dataset.getName(i).c_str();
+
+                    ImGui::Text("%s:\t%.3f +- %.3f", featureName, currentNeuron[i], currentNeuronSigma[i]);
+                }
+
+                ImGui::EndTooltip();
+                
+                ImGui::OpenPopup("my popup");
             }
 
         }

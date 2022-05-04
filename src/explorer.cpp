@@ -255,8 +255,8 @@ namespace VSOMExplorer
             
             auto xSteps = som.getWidth();
             auto ySteps = som.getHeight();
-            auto xStepSize = ImGui::GetWindowWidth() / xSteps;
-            auto yStepSize = ImGui::GetWindowHeight() / ySteps;
+            auto xStepSize = ImGui::GetContentRegionAvail().x / xSteps;
+            auto yStepSize = ImGui::GetContentRegionAvail().y / ySteps;
 
             auto maxRedValue = som.getMaxValueOfFeature(currentRedColumnId);
             auto minRedValue = som.getMinValueOfFeature(currentRedColumnId);
@@ -265,43 +265,71 @@ namespace VSOMExplorer
             auto maxBlueValue = som.getMaxValueOfFeature(currentBlueColumnId);
             auto minBlueValue = som.getMinValueOfFeature(currentBlueColumnId);
 
-            ImDrawList *draw_list = ImGui::GetWindowDrawList();
+            size_t hoverNeuronX{0}, hoverNeuronY{0};
 
-            const ImVec2 p = ImGui::GetCursorScreenPos();
-
-            for (size_t yIndex{0}; yIndex < ySteps; ++yIndex)
+            if(ImGui::BeginChild("HoverMap"))
             {
-                for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
+                /* Hover neuron index */
+                hoverNeuronX = static_cast<size_t>((ImGui::GetMousePos().x - ImGui::GetCursorScreenPos().x - ImGui::GetScrollX())/xStepSize);
+                hoverNeuronY = static_cast<size_t>((ImGui::GetMousePos().y - ImGui::GetCursorScreenPos().y - ImGui::GetScrollY())/yStepSize);
+
+                ImDrawList *draw_list = ImGui::GetWindowDrawList();
+
+                const ImVec2 p = ImGui::GetCursorScreenPos();
+
+                for (size_t yIndex{0}; yIndex < ySteps; ++yIndex)
                 {
-                    auto modelVector = som.getNeuron(SomIndex{xIndex, yIndex});
+                    for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
+                    {
+                        auto modelVector = som.getNeuron(SomIndex{xIndex, yIndex});
 
-                    auto redValue = modelVector[currentRedColumnId];
-                    auto greenValue = modelVector[currentGreenColumnId];
-                    auto blueValue = modelVector[currentBlueColumnId];
-                    
-                    auto staticallyScaledRedValue = (redValue - minRedValue)*255/(maxRedValue - minRedValue)*redValue;
-                    auto staticallyScaledGreenValue = (greenValue - minGreenValue)*255/(maxGreenValue - minGreenValue)*greenValue;
-                    auto staticallyScaledBlueValue = (blueValue - minBlueValue)*255/(maxBlueValue - minBlueValue)*blueValue;
+                        auto redValue = modelVector[currentRedColumnId];
+                        auto greenValue = modelVector[currentGreenColumnId];
+                        auto blueValue = modelVector[currentBlueColumnId];
 
-                    auto constrainedRedValue = static_cast<int>(staticallyScaledRedValue > 255.0 ? 255.0 :
-                        staticallyScaledRedValue < 0.0 ? 0.0 : 
-                        staticallyScaledRedValue);
-                    auto constrainedGreenValue = static_cast<int>(staticallyScaledGreenValue > 255.0 ? 255.0 :
-                        staticallyScaledGreenValue < 0.0 ? 0.0 : 
-                        staticallyScaledGreenValue);
-                    auto constrainedBlueValue = static_cast<int>(staticallyScaledBlueValue > 255.0 ? 255.0 :
-                        staticallyScaledBlueValue < 0.0 ? 0.0 : 
-                        staticallyScaledBlueValue);
+                        auto staticallyScaledRedValue = (redValue - minRedValue)*255/(maxRedValue - minRedValue)*redValue;
+                        auto staticallyScaledGreenValue = (greenValue - minGreenValue)*255/(maxGreenValue - minGreenValue)*greenValue;
+                        auto staticallyScaledBlueValue = (blueValue - minBlueValue)*255/(maxBlueValue - minBlueValue)*blueValue;
 
-                    draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
-                                                       ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), 
-                                                       IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
-                                                       IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
-                                                       IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
-                                                       IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255));
+                        auto constrainedRedValue = static_cast<int>(staticallyScaledRedValue > 255.0 ? 255.0 :
+                            staticallyScaledRedValue < 0.0 ? 0.0 : 
+                            staticallyScaledRedValue);
+                        auto constrainedGreenValue = static_cast<int>(staticallyScaledGreenValue > 255.0 ? 255.0 :
+                            staticallyScaledGreenValue < 0.0 ? 0.0 : 
+                            staticallyScaledGreenValue);
+                        auto constrainedBlueValue = static_cast<int>(staticallyScaledBlueValue > 255.0 ? 255.0 :
+                            staticallyScaledBlueValue < 0.0 ? 0.0 : 
+                            staticallyScaledBlueValue);
+
+                        draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
+                                                           ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), 
+                                                           IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
+                                                           IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
+                                                           IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
+                                                           IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255));
+                    }
                 }
             }
 
+            ImGui::EndChild();
+
+            /* Display model vector values in tooltip */
+            if (ImGui::IsItemHovered())
+            {
+                auto currentNeuron = som.getNeuron(som.getIndex(SomIndex{hoverNeuronX, hoverNeuronY}));
+
+                ImGui::BeginTooltip();
+                for(size_t i{0}; i<currentNeuron.size(); ++i)
+                {
+                    auto featureName = dataset.getName(i).c_str();
+
+                    ImGui::Text("%s:\t%.3f", featureName, currentNeuron[i]);
+                }
+
+                ImGui::EndTooltip();
+                
+                ImGui::OpenPopup("my popup");
+            }
         }
         ImGui::End();
     }
@@ -399,7 +427,6 @@ namespace VSOMExplorer
                 static double etaDecay = 0.01;
                 static double sigma0 = 10;
                 static double sigmaDecay = 0.01;
-                static Som::WeigthDecayFunction wdf = Som::WeigthDecayFunction::Exponential;
 
                 // ImGui::InputInt("Number of epochs", numberOfEpochs);
                 static int elem = static_cast<std::underlying_type_t<Som::WeigthDecayFunction>>(Som::WeigthDecayFunction::Exponential);

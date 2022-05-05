@@ -5,6 +5,7 @@
 
 #include "explorer.h"
 #include <libsom/DataSet.hpp>
+#include <libsom/SqliteDataLoader.hpp>
 
 #include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_sdl.h"
@@ -110,7 +111,7 @@ int main(int, char **)
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Load VSOM dataset
-    auto dbConnection = DataBase{};
+    auto dbConnection = SqliteDataLoader{};
     if( dbConnection.open("../data/testDb.sq3") == 0 )
         return 0;
         

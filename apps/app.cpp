@@ -111,12 +111,11 @@ int main(int, char **)
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Load VSOM dataset
-    auto dbConnection = SqliteDataLoader{};
+    auto dbConnection = SqliteDataLoader("../data/columnSpec.txt");
     if( dbConnection.open("../data/testDb.sq3") == 0 )
         return 0;
         
-    auto dataset = DataSet{"../data/columnSpec.txt"};
-    dataset.loadDataBase(&dbConnection);
+    auto dataset = DataSet(dbConnection);
 
     auto som = Som(100, 100, dataset.vectorLength());
     som.randomInitialize((unsigned)(time(NULL)+clock()), 1);

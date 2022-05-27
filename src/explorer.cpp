@@ -8,6 +8,28 @@
 
 namespace VSOMExplorer
 {
+    static bool showModelVectorsAsImage = false;
+    static int modelVectorAsImageWidth = 28;
+    static int modelVectorAsImageHeight = 28;
+    
+    int scaleColorToUCharRange(float value, float max, float min)
+    {
+        auto staticallyScaledValue = (value - min) * 255 / (max - min);
+
+        return static_cast<int>(staticallyScaledValue > 255.f ? 255.f : staticallyScaledValue < 0.f ? 0.f : staticallyScaledValue);                
+    }
+
+    int scaleColorToUCharRangeWithZoom(float value, float max, float min, int outMax, int outMin)
+    {
+        auto scaledValue = scaleColorToUCharRange(value, max, min);
+
+        auto span = outMax - outMin;
+        auto dynamicallyScaledValue = (scaledValue - outMin) * 255.0 / span;
+        auto contrainedValue = dynamicallyScaledValue < 0. ? 0. : dynamicallyScaledValue > 255.0 ? 255.0
+                                                                                               : dynamicallyScaledValue;
+        return static_cast<int>(contrainedValue);
+    }
+
     static void RenderCombo(const char *name, const char **labels, const size_t numberOfChoices, size_t *currentId, const char *combo_preview_value)
     {
         if (ImGui::BeginCombo(name, combo_preview_value))
@@ -83,33 +105,77 @@ namespace VSOMExplorer
     {
         if (ImGui::Begin("Dataset"))
         {
-            static ImGuiTableFlags flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
-            static bool display_headers = true;
-            auto numberOfColumns = dataset.vectorLength();
             auto numberOfRows = dataset.size();
+            numberOfRows = numberOfRows >= 100 ? 100 : numberOfRows;
 
-            if (ImGui::BeginTable("table1", numberOfColumns, flags))
+            if (showModelVectorsAsImage)
             {
-                if (display_headers)
-                {
-                    for (size_t columnIndex{0}; columnIndex < numberOfColumns; ++columnIndex)
-                        ImGui::TableSetupColumn(dataset.getName(columnIndex).c_str());
-                    ImGui::TableHeadersRow();
-                }
+                float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetContentRegionAvail().x;
+                auto p = ImGui::GetCursorScreenPos();
+                auto original_p_x = p.x;
+                const size_t width = modelVectorAsImageWidth, height = modelVectorAsImageWidth;
+                const size_t x_offset = 1, y_offset = 1, step_size = 2;
 
-                for (size_t row{0}; row < numberOfRows; ++row)
+                for (int n = 0; n < numberOfRows; ++n)
                 {
-                    auto rowValues = dataset.getData(row);
-                    ImGui::TableNextRow();
-                    for (size_t column{0}; column < numberOfColumns; ++column)
+                    ImDrawList *draw_list = ImGui::GetWindowDrawList();
+                    auto currentNeuron = dataset.getData(n);
+
+                    p.x += x_offset + width * step_size;
+
+                    /* Draw actual image */
+                    for (size_t i{0}; i < currentNeuron.size(); ++i)
                     {
-                        ImGui::TableSetColumnIndex(column);
-                        auto columnValue = rowValues[column];
-                        auto textValue = std::to_string(columnValue);
-                        ImGui::TextUnformatted(textValue.c_str());
+                        const size_t x = i % width * step_size + x_offset;
+                        const size_t y = i / height * step_size + y_offset;
+
+                        auto currentValue = scaleColorToUCharRange(currentNeuron[i], 255.f, 0.f);
+
+                        draw_list->AddRectFilled(ImVec2(p.x + x, p.y + y),
+                                                ImVec2(p.x + x + step_size, p.y + y + step_size),
+                                                IM_COL32(currentValue, currentValue, currentValue, 255));
+                    }
+
+                    /* Item list row wrap */
+                    float last_image_x2 = p.x + (modelVectorAsImageWidth*step_size + x_offset);
+                    float next_image_x2 = last_image_x2 + step_size*modelVectorAsImageWidth; // Expected position if next image was on same line
+                    if (next_image_x2 > window_visible_x2)
+                    {
+                        p.y += modelVectorAsImageHeight*step_size + y_offset;
+                        p.x = original_p_x;
                     }
                 }
-                ImGui::EndTable();
+            }
+            else
+            {
+                static ImGuiTableFlags flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
+                static bool display_headers = true;
+                auto numberOfColumns = dataset.vectorLength();
+                numberOfColumns = numberOfColumns >= 64 ? 64 : numberOfColumns;
+
+                if (ImGui::BeginTable("table1", numberOfColumns, flags))
+                {
+                    if (display_headers)
+                    {
+                        for (size_t columnIndex{0}; columnIndex < numberOfColumns; ++columnIndex)
+                            ImGui::TableSetupColumn(dataset.getName(columnIndex).c_str());
+                        ImGui::TableHeadersRow();
+                    }
+
+                    for (size_t row{0}; row < numberOfRows; ++row)
+                    {
+                        auto rowValues = dataset.getData(row);
+                        ImGui::TableNextRow();
+                        for (size_t column{0}; column < numberOfColumns; ++column)
+                        {
+                            ImGui::TableSetColumnIndex(column);
+                            auto columnValue = rowValues[column];
+                            auto textValue = std::to_string(columnValue);
+                            ImGui::TextUnformatted(textValue.c_str());
+                        }
+                    }
+                    ImGui::EndTable();
+                }
             }
         }
         ImGui::End();
@@ -140,12 +206,7 @@ namespace VSOMExplorer
                 for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
                 {
                     auto unscaledValue = uMatrix.getValueAtIndex(xIndex, yIndex);
-                    auto staticallyScaledValue = 255.0 / maxValue * unscaledValue;
-                    auto span = upper - lower;
-                    auto dynamicallyScaledValue = (staticallyScaledValue - lower) * 255.0 / span;
-                    auto contrainedValue = dynamicallyScaledValue < 0 ? 0 : dynamicallyScaledValue > 255.0 ? 255.0
-                                                                                                           : dynamicallyScaledValue;
-                    auto value = static_cast<int>(contrainedValue);
+                    auto value = scaleColorToUCharRangeWithZoom(unscaledValue, maxValue, 0.f, static_cast<int>(upper), static_cast<int>(lower));
                     
                     draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
                                                        ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255));
@@ -181,12 +242,7 @@ namespace VSOMExplorer
                 for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
                 {
                     auto unscaledValue = weightMap[yIndex*xSteps + xIndex];
-                    auto staticallyScaledValue = 255.0 / maxValue * unscaledValue;
-                    auto span = upper - lower;
-                    auto dynamicallyScaledValue = (staticallyScaledValue - lower) * 255.0 / span;
-                    auto contrainedValue = dynamicallyScaledValue < 0 ? 0 : dynamicallyScaledValue > 255.0 ? 255.0
-                                                                                                           : dynamicallyScaledValue;
-                    auto value = static_cast<int>(contrainedValue);
+                    auto value = scaleColorToUCharRangeWithZoom(unscaledValue, maxValue, 0.f, static_cast<int>(upper), static_cast<int>(lower));
                     
                     draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
                                                        ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255));
@@ -222,12 +278,7 @@ namespace VSOMExplorer
                 for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
                 {
                     auto unscaledValue = bmuHits[yIndex*xSteps + xIndex];
-                    auto staticallyScaledValue = 255.0 / maxValue * unscaledValue;
-                    auto span = upper - lower;
-                    auto dynamicallyScaledValue = (staticallyScaledValue - lower) * 255.0 / span;
-                    auto contrainedValue = dynamicallyScaledValue < 0 ? 0 : dynamicallyScaledValue > 255.0 ? 255.0
-                                                                                                           : dynamicallyScaledValue;
-                    auto value = static_cast<int>(contrainedValue);
+                    auto value = scaleColorToUCharRangeWithZoom(unscaledValue, maxValue, 0.f, static_cast<int>(upper), static_cast<int>(lower));
                     
                     draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
                                                        ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255));
@@ -287,19 +338,9 @@ namespace VSOMExplorer
                         auto greenValue = modelVector[currentGreenColumnId];
                         auto blueValue = modelVector[currentBlueColumnId];
 
-                        auto staticallyScaledRedValue = (redValue - minRedValue)*255/(maxRedValue - minRedValue)*redValue;
-                        auto staticallyScaledGreenValue = (greenValue - minGreenValue)*255/(maxGreenValue - minGreenValue)*greenValue;
-                        auto staticallyScaledBlueValue = (blueValue - minBlueValue)*255/(maxBlueValue - minBlueValue)*blueValue;
-
-                        auto constrainedRedValue = static_cast<int>(staticallyScaledRedValue > 255.0 ? 255.0 :
-                            staticallyScaledRedValue < 0.0 ? 0.0 : 
-                            staticallyScaledRedValue);
-                        auto constrainedGreenValue = static_cast<int>(staticallyScaledGreenValue > 255.0 ? 255.0 :
-                            staticallyScaledGreenValue < 0.0 ? 0.0 : 
-                            staticallyScaledGreenValue);
-                        auto constrainedBlueValue = static_cast<int>(staticallyScaledBlueValue > 255.0 ? 255.0 :
-                            staticallyScaledBlueValue < 0.0 ? 0.0 : 
-                            staticallyScaledBlueValue);
+                        auto constrainedRedValue = scaleColorToUCharRange(redValue, maxRedValue, minRedValue);
+                        auto constrainedGreenValue = scaleColorToUCharRange(greenValue, maxGreenValue, minGreenValue);
+                        auto constrainedBlueValue = scaleColorToUCharRange(blueValue, maxBlueValue, minBlueValue);
 
                         draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
                                                            ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), 
@@ -318,17 +359,37 @@ namespace VSOMExplorer
             {
                 auto currentNeuron = som.getNeuron(som.getIndex(SomIndex{hoverNeuronX, hoverNeuronY}));
 
-                ImGui::BeginTooltip();
-                for(size_t i{0}; i<currentNeuron.size(); ++i)
+                if (!showModelVectorsAsImage)
                 {
-                    auto featureName = dataset.getName(i).c_str();
+                    ImGui::BeginTooltip();
+                    for (size_t i{0}; i < currentNeuron.size(); ++i)
+                    {
+                        auto featureName = dataset.getName(i).c_str();
 
-                    ImGui::Text("%s:\t%.3f", featureName, currentNeuron[i]);
+                        ImGui::Text("%s:\t%.3f", featureName, currentNeuron[i]);
+                    }
+                    ImGui::EndTooltip();
                 }
+                else if (showModelVectorsAsImage)
+                {
+                    ImDrawList *draw_list = ImGui::GetForegroundDrawList();
+                    
+                    for (size_t i{0}; i < currentNeuron.size(); ++i)
+                    {
+                            const ImVec2 p = ImGui::GetMousePos();
 
-                ImGui::EndTooltip();
-                
-                ImGui::OpenPopup("my popup");
+                            const size_t width = modelVectorAsImageWidth, height = modelVectorAsImageWidth;
+                            const size_t x_offset = 10, y_offset = 20;
+                            const size_t x = i % width * 2 + x_offset;
+                            const size_t y = i / height * 2 + y_offset;
+
+                            auto currentValue = scaleColorToUCharRange(currentNeuron[i], 255.f, 0.f);
+
+                            draw_list->AddRectFilled(ImVec2(p.x + x, p.y + y),
+                                                     ImVec2(p.x + x + 2, p.y + y + 2),
+                                                     IM_COL32(currentValue, currentValue, currentValue, 255));
+                    }
+                }
             }
         }
         ImGui::End();
@@ -384,16 +445,9 @@ namespace VSOMExplorer
                         auto greenValue = modelVector[currentGreenColumnId];
                         auto blueValue = modelVector[currentBlueColumnId];
 
-                        auto staticallyScaledRedValue = (redValue - minRedValue) * 255 / (maxRedValue - minRedValue) * redValue;
-                        auto staticallyScaledGreenValue = (greenValue - minGreenValue) * 255 / (maxGreenValue - minGreenValue) * greenValue;
-                        auto staticallyScaledBlueValue = (blueValue - minBlueValue) * 255 / (maxBlueValue - minBlueValue) * blueValue;
-
-                        auto constrainedRedValue = static_cast<int>(staticallyScaledRedValue > 255.0 ? 255.0 : staticallyScaledRedValue < 0.0 ? 0.0
-                                                                                                                                              : staticallyScaledRedValue);
-                        auto constrainedGreenValue = static_cast<int>(staticallyScaledGreenValue > 255.0 ? 255.0 : staticallyScaledGreenValue < 0.0 ? 0.0
-                                                                                                                                                    : staticallyScaledGreenValue);
-                        auto constrainedBlueValue = static_cast<int>(staticallyScaledBlueValue > 255.0 ? 255.0 : staticallyScaledBlueValue < 0.0 ? 0.0
-                                                                                                                                                 : staticallyScaledBlueValue);
+                        auto constrainedRedValue = scaleColorToUCharRange(redValue, maxRedValue, minRedValue);
+                        auto constrainedGreenValue = scaleColorToUCharRange(greenValue, maxGreenValue, minGreenValue);
+                        auto constrainedBlueValue = scaleColorToUCharRange(blueValue, maxBlueValue, minBlueValue);
 
                         draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
                                                            ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize),
@@ -505,6 +559,24 @@ namespace VSOMExplorer
         ImGui::End();
     }
 
+    void SettingsPane()
+    {
+        if(ImGui::Begin("Settings"))
+        {
+            ImGui::Text("Display");
+            ImGui::Checkbox("Show model vectors as image", &showModelVectorsAsImage);
+
+            if(showModelVectorsAsImage)
+            {
+                ImGui::InputInt("Image width", &modelVectorAsImageWidth);
+                ImGui::InputInt("Image height", &modelVectorAsImageHeight);
+            }
+            if(modelVectorAsImageHeight < 0) modelVectorAsImageHeight = 0;
+            if(modelVectorAsImageWidth < 0) modelVectorAsImageWidth = 0;
+        }
+        ImGui::End();
+    }
+
     void RenderExplorer(Som &som, DataSet &dataset)
     {
         ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
@@ -523,5 +595,7 @@ namespace VSOMExplorer
 
         RenderMap(som, dataset);
         RenderSigmaMap(som, dataset);
+
+        SettingsPane();
     }
 }

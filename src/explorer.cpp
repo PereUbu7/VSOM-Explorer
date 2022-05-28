@@ -107,7 +107,6 @@ namespace VSOMExplorer
         {
             auto numberOfColumns = dataset.vectorLength();
             auto columnNames = dataset.getNames();
-            auto columnWeights = dataset.getWeights(); // TODO: Create weight non-const accessor
 
             ImGui::Text("Columns:");
 

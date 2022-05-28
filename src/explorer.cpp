@@ -101,6 +101,24 @@ namespace VSOMExplorer
         }
     }
 
+    static void DatasetEditor(DataSet &dataset)
+    {
+        if(ImGui::Begin("Dataset Editor"))
+        {
+            auto numberOfColumns = dataset.vectorLength();
+            auto columnNames = dataset.getNames();
+            auto columnWeights = dataset.getWeights(); // TODO: Create weight non-const accessor
+
+            ImGui::Text("Columns:");
+
+            for(size_t currentColumn{0}; currentColumn < numberOfColumns; ++currentColumn)
+            {
+                ImGui::InputFloat((columnNames[currentColumn] + " Weight").c_str(), &dataset.getWeight(currentColumn));
+            }
+        }
+        ImGui::End();
+    }
+
     static void DatasetViewer(const DataSet &dataset)
     {
         if (ImGui::Begin("Dataset"))
@@ -584,8 +602,10 @@ namespace VSOMExplorer
         LoadMainMenu();
 
         SomHandler(som, dataset);
+        SettingsPane();
 
         DatasetViewer(dataset);
+        DatasetEditor(dataset);
 
         RenderUMatrix(som.getUMatrix());
         RenderWeigthMap(som);
@@ -596,6 +616,5 @@ namespace VSOMExplorer
         RenderMap(som, dataset);
         RenderSigmaMap(som, dataset);
 
-        SettingsPane();
     }
 }

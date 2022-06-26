@@ -113,14 +113,14 @@ int main(int, char **)
 
     // Load VSOM dataset
     // auto dbConnection = SqliteDataLoader("../data/columnSpec.txt");
-    auto dbConnection = MnistDataLoader();
+    auto dbConnection = MnistDataLoader(20000);
     // if( dbConnection.open("../data/testDb.sq3") == 0 )
     if( dbConnection.open("../data") == 0 )
         return 0;
         
     auto dataset = DataSet(dbConnection);
 
-    auto som = Som(100, 100, dataset.vectorLength());
+    auto som = Som(10, 10, dataset.vectorLength());
     som.randomInitialize((unsigned)(time(NULL)+clock()), 1);
     
     // Main loop

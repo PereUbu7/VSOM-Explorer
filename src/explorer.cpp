@@ -30,7 +30,7 @@ namespace VSOMExplorer
         return static_cast<int>(contrainedValue);
     }
 
-    static void RenderCombo(const char *name, const char **labels, const size_t numberOfChoices, size_t *currentId, const char *combo_preview_value)
+    static void RenderCombo(const char *name, const char * const* labels, const size_t numberOfChoices, size_t *currentId, const char *combo_preview_value)
     {
         if (ImGui::BeginCombo(name, combo_preview_value))
         {
@@ -49,18 +49,19 @@ namespace VSOMExplorer
 
     static void RenderCombo(const std::string &name, const std::vector<std::string> &labels, size_t *currentId, const std::string &combo_preview_value)
     {
-        auto c_labels = std::vector<char*>();
-        c_labels.reserve(labels.size());
+        // Convert vector<string> to const char* const*
+        const std::vector<const char*> c_labels = [&labels]()
+        {   
+            auto c_l = std::vector<const char*>{};
+            c_l.reserve(labels.size());
 
-       std::transform(labels.begin(), labels.end(), std::back_inserter(c_labels), 
-        [](const std::string & s)
-            {
-                char *pc = new char[s.size()+1];
-                std::strcpy(pc, s.c_str());
-                return pc; 
-            }); 
+            for(auto& s: labels)
+                c_l.push_back(&s[0]);
+
+            return c_l;
+        }();
         
-        RenderCombo(name.c_str(), const_cast<const char**>(c_labels.data()), labels.size(), currentId, combo_preview_value.c_str());
+        RenderCombo(name.c_str(), c_labels.data(), labels.size(), currentId, combo_preview_value.c_str());
     }
 
     static void LoadMainMenu()
@@ -108,6 +109,16 @@ namespace VSOMExplorer
             auto numberOfColumns = dataset.vectorLength();
             auto columnNames = dataset.getNames();
 
+            static float setAllValue{0};
+            ImGui::InputFloat("Set all", &setAllValue);
+            if(ImGui::Button("Apply"))
+            {
+                for (size_t currentColumn{0}; currentColumn < numberOfColumns; ++currentColumn)
+                {
+                    dataset.getWeight(currentColumn) = setAllValue;
+                }
+            }
+
             ImGui::Text("Columns:");
 
             for(size_t currentColumn{0}; currentColumn < numberOfColumns; ++currentColumn)
@@ -122,6 +133,7 @@ namespace VSOMExplorer
     {
         if (ImGui::Begin("Dataset"))
         {
+            const static auto previewData = dataset.getPreviewData(100);
             auto numberOfRows = dataset.size();
             numberOfRows = numberOfRows >= 100 ? 100 : numberOfRows;
 
@@ -136,7 +148,8 @@ namespace VSOMExplorer
                 for (int n = 0; n < numberOfRows; ++n)
                 {
                     ImDrawList *draw_list = ImGui::GetWindowDrawList();
-                    auto currentNeuron = dataset.getData(n);
+                    auto currentNeuron = previewData[n];
+
 
                     p.x += x_offset + width * step_size;
 
@@ -181,7 +194,7 @@ namespace VSOMExplorer
 
                     for (size_t row{0}; row < numberOfRows; ++row)
                     {
-                        auto rowValues = dataset.getData(row);
+                        auto rowValues = previewData[row];
                         ImGui::TableNextRow();
                         for (size_t column{0}; column < numberOfColumns; ++column)
                         {
@@ -309,7 +322,7 @@ namespace VSOMExplorer
     {
         if (ImGui::Begin("Map"))
         {
-            auto featureNames = dataset.getNames();
+            const auto featureNames = dataset.getNames();
             // featureNames.push_back("None");
             const auto noneIndex = featureNames.size() - 1;
 

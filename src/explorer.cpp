@@ -497,17 +497,37 @@ namespace VSOMExplorer
                 auto currentNeuron = som.getNeuron(index);
                 auto currentNeuronSigma = som.getSigmaNeuron(index);
 
-                ImGui::BeginTooltip();
-                for(size_t i{0}; i<currentNeuron.size(); ++i)
+                if (!showModelVectorsAsImage)
                 {
-                    auto featureName = dataset.getName(i).c_str();
+                    ImGui::BeginTooltip();
+                    for (size_t i{0}; i < currentNeuron.size(); ++i)
+                    {
+                        auto featureName = dataset.getName(i).c_str();
 
-                    ImGui::Text("%s:\t%.3f +- %.3f", featureName, currentNeuron[i], currentNeuronSigma[i]);
+                        ImGui::Text("%s:\t%.3f +- %.3f", featureName, currentNeuron[i], currentNeuronSigma[i]);
+                    }
+                    ImGui::EndTooltip();
                 }
+                else if (showModelVectorsAsImage)
+                {
+                    ImDrawList *draw_list = ImGui::GetForegroundDrawList();
+                    
+                    for (size_t i{0}; i < currentNeuron.size(); ++i)
+                    {
+                            const ImVec2 p = ImGui::GetMousePos();
 
-                ImGui::EndTooltip();
-                
-                ImGui::OpenPopup("my popup");
+                            const size_t width = modelVectorAsImageWidth, height = modelVectorAsImageWidth;
+                            const size_t x_offset = 10, y_offset = 20;
+                            const size_t x = i % width * 2 + x_offset;
+                            const size_t y = i / height * 2 + y_offset;
+
+                            auto currentValue = scaleColorToUCharRange(currentNeuronSigma[i], 255.f, 0.f);
+
+                            draw_list->AddRectFilled(ImVec2(p.x + x, p.y + y),
+                                                     ImVec2(p.x + x + 2, p.y + y + 2),
+                                                     IM_COL32(currentValue, currentValue, currentValue, 255));
+                    }
+                }
             }
 
         }

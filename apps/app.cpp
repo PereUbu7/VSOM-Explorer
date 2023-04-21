@@ -8,9 +8,13 @@
 #include <libsom/SqliteDataLoader.hpp>
 #include <libsom/MnistDataLoader.hpp>
 
+#include <execinfo.h>
+#include <signal.h>
+
 #include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_sdl.h"
 #include "imgui/backends/imgui_impl_opengl3.h"
+
 #include <stdio.h>
 #include <SDL.h>
 #if defined(IMGUI_IMPL_OPENGL_ES2)
@@ -19,9 +23,23 @@
 #include <SDL_opengl.h>
 #endif
 
+void handler(int sig) {
+  void *array[10];
+  size_t size;
+
+  // get void*'s for all entries on the stack
+  size = backtrace(array, 10);
+
+  // print out all the frames to stderr
+  fprintf(stderr, "Error: signal %d:\n", sig);
+  backtrace_symbols_fd(array, size, STDERR_FILENO);
+  exit(1);
+}
+
 // Main code
 int main(int, char **)
 {
+    signal(SIGSEGV, handler);
     // Setup SDL
     // (Some versions of SDL before <2.0.10 appears to have performance/stalling issues on a minority of Windows systems,
     // depending on whether SDL_INIT_GAMECONTROLLER is enabled or disabled.. updating to latest version of SDL is recommended!)
@@ -113,15 +131,16 @@ int main(int, char **)
 
     // Load VSOM dataset
     // auto dbConnection = SqliteDataLoader("../data/columnSpec.txt");
-    auto dbConnection = MnistDataLoader(20000);
+    // auto dbConnection = std::unique_ptr<IDataLoader>(new MnistDataLoader());
     // if( dbConnection.open("../data/testDb.sq3") == 0 )
-    if( dbConnection.open("../data") == 0 )
-        return 0;
+    // if( dbConnection->open("../data") == 0 )
+    //     return 0;
+    
+    auto explorer = VSOMExplorer::Handler{};
         
-    auto dataset = DataSet(dbConnection);
-
-    auto som = Som(10, 10, dataset.vectorLength());
-    som.randomInitialize((unsigned)(time(NULL)+clock()), 1);
+    // auto dataset = std::unique_ptr<DataSet>(new DataSet(*dbConnection));
+    
+    // explorer.SetDataset(std::move(dataset));
     
     // Main loop
     bool done = false;
@@ -147,7 +166,12 @@ int main(int, char **)
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
-        VSOMExplorer::RenderExplorer(som, dataset);
+        try {
+            explorer.RenderExplorer();
+        }
+        catch(std::exception &ex) {
+            std::cerr << "Exception: " << ex.what() << '\n';
+        }
 
         // Rendering
         ImGui::Render();

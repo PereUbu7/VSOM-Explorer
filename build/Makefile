@@ -17,11 +17,13 @@ CXX = g++
 EXE = VSOM-Explorer
 EXTERNAL_DIR = ../external
 IMGUI_DIR = $(EXTERNAL_DIR)/imgui
+IMGUIFILEDIALOG_DIR = $(EXTERNAL_DIR)/ImGuiFileDialog
 INCLUDE_DIR = ../include
 SOURCE_DIR = ../src
 APP_DIR = ../apps
 SOURCES = $(APP_DIR)/app.cpp
 SOURCES += $(IMGUI_DIR)/imgui.cpp $(IMGUI_DIR)/imgui_demo.cpp $(IMGUI_DIR)/imgui_draw.cpp $(IMGUI_DIR)/imgui_tables.cpp $(IMGUI_DIR)/imgui_widgets.cpp
+SOURCES += $(IMGUIFILEDIALOG_DIR)/ImGuiFileDialog.cpp
 SOURCES += $(IMGUI_DIR)/backends/imgui_impl_sdl.cpp $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
 SOURCES += $(SOURCE_DIR)/explorer.cpp
 OBJS = $(addsuffix .o, $(basename $(notdir $(SOURCES))))
@@ -84,6 +86,9 @@ endif
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 %.o:$(IMGUI_DIR)/%.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+%.o:$(IMGUIFILEDIALOG_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 %.o:$(IMGUI_DIR)/backends/%.cpp

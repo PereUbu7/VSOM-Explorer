@@ -8,29 +8,26 @@
 
 namespace VSOMExplorer
 {
-    static bool showModelVectorsAsImage = false;
-    static int modelVectorAsImageWidth = 28;
-    static int modelVectorAsImageHeight = 28;
-    
-    int scaleColorToUCharRange(float value, float max, float min)
+    int Handler::scaleColorToUCharRange(float value, float max, float min)
     {
         auto staticallyScaledValue = (value - min) * 255 / (max - min);
 
-        return static_cast<int>(staticallyScaledValue > 255.f ? 255.f : staticallyScaledValue < 0.f ? 0.f : staticallyScaledValue);                
-    }
+        return static_cast<int>(staticallyScaledValue > 255.f ? 255.f : staticallyScaledValue < 0.f ? 0.f
+                                                                                                    : staticallyScaledValue);
+    };
 
-    int scaleColorToUCharRangeWithZoom(float value, float max, float min, int outMax, int outMin)
+    int Handler::scaleColorToUCharRangeWithZoom(float value, float max, float min, int outMax, int outMin)
     {
         auto scaledValue = scaleColorToUCharRange(value, max, min);
 
         auto span = outMax - outMin;
         auto dynamicallyScaledValue = (scaledValue - outMin) * 255.0 / span;
         auto contrainedValue = dynamicallyScaledValue < 0. ? 0. : dynamicallyScaledValue > 255.0 ? 255.0
-                                                                                               : dynamicallyScaledValue;
+                                                                                                 : dynamicallyScaledValue;
         return static_cast<int>(contrainedValue);
     }
 
-    static void RenderCombo(const char *name, const char * const* labels, const size_t numberOfChoices, size_t *currentId, const char *combo_preview_value)
+    void Handler::RenderCombo(const char *name, const char *const *labels, const size_t numberOfChoices, size_t *currentId, const char *combo_preview_value)
     {
         if (ImGui::BeginCombo(name, combo_preview_value))
         {
@@ -47,24 +44,24 @@ namespace VSOMExplorer
         }
     }
 
-    static void RenderCombo(const std::string &name, const std::vector<std::string> &labels, size_t *currentId, const std::string &combo_preview_value)
+    void Handler::RenderCombo(const std::string &name, const std::vector<std::string> &labels, size_t *currentId, const std::string &combo_preview_value)
     {
         // Convert vector<string> to const char* const*
-        const std::vector<const char*> c_labels = [&labels]()
-        {   
-            auto c_l = std::vector<const char*>{};
+        const std::vector<const char *> c_labels = [&labels]()
+        {
+            auto c_l = std::vector<const char *>{};
             c_l.reserve(labels.size());
 
-            for(auto& s: labels)
+            for (auto &s : labels)
                 c_l.push_back(&s[0]);
 
             return c_l;
         }();
-        
+
         RenderCombo(name.c_str(), c_labels.data(), labels.size(), currentId, combo_preview_value.c_str());
     }
 
-    static void LoadMainMenu()
+    void Handler::LoadMainMenu()
     {
         if (ImGui::BeginMainMenuBar())
         {
@@ -72,6 +69,11 @@ namespace VSOMExplorer
             {
                 if (ImGui::MenuItem("New", "CTRL+N"))
                 {
+                }
+                if (ImGui::MenuItem("Open data", "CTRL+O"))
+                {
+                    // open Dialog Simple
+                    ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File", "*,*.*", ".", 1, nullptr, ImGuiFileDialogFlags_Modal);
                 }
                 if (ImGui::MenuItem("Quit", "CTRL+Q"))
                 {
@@ -100,41 +102,66 @@ namespace VSOMExplorer
             }
             ImGui::EndMainMenuBar();
         }
+
+        // display
+        if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
+        {
+            // action if OK
+            if (ImGuiFileDialog::Instance()->IsOk())
+            {
+                std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+                std::string filePath = ImGuiFileDialog::Instance()->GetCurrentPath();
+
+                std::optional<size_t> lastDatasetDepth = m_dataLoader ? m_dataLoader->getDepth() : std::optional<size_t>{};
+
+                m_dataLoader = std::make_unique<SqliteDataLoader>("../data/columnSpec.txt");
+
+                /* Open new dataset */
+                if (m_dataLoader->open(filePathName.c_str()) != 0) 
+                {
+                    m_dataset = std::unique_ptr<DataSet>(new DataSet(*m_dataLoader));
+                    m_som = Som(10, 10, m_dataset->vectorLength());
+                }
+            }
+
+            // close
+            ImGuiFileDialog::Instance()->Close();
+        }
     }
 
-    static void DatasetEditor(DataSet &dataset)
+    void Handler::DatasetEditor()
     {
-        if(ImGui::Begin("Dataset Editor"))
+        if (ImGui::Begin("Dataset Editor") && m_dataset != nullptr)
         {
-            auto numberOfColumns = dataset.vectorLength();
-            auto columnNames = dataset.getNames();
+            auto numberOfColumns = m_dataset->vectorLength();
+            auto columnNames = m_dataset->getNames();
 
             static float setAllValue{0};
             ImGui::InputFloat("Set all", &setAllValue);
-            if(ImGui::Button("Apply"))
+            if (ImGui::Button("Apply"))
             {
                 for (size_t currentColumn{0}; currentColumn < numberOfColumns; ++currentColumn)
                 {
-                    dataset.getWeight(currentColumn) = setAllValue;
+                    m_dataset->getWeight(currentColumn) = setAllValue;
                 }
             }
 
             ImGui::Text("Columns:");
 
-            for(size_t currentColumn{0}; currentColumn < numberOfColumns; ++currentColumn)
+            for (size_t currentColumn{0}; currentColumn < numberOfColumns; ++currentColumn)
             {
-                ImGui::InputFloat((columnNames[currentColumn] + " Weight").c_str(), &dataset.getWeight(currentColumn));
+                ImGui::InputFloat((columnNames[currentColumn] + " Weight").c_str(), &m_dataset->getWeight(currentColumn));
             }
         }
         ImGui::End();
     }
 
-    static void DatasetViewer(const DataSet &dataset)
+    void Handler::DatasetViewer()
     {
-        if (ImGui::Begin("Dataset"))
-        {
-            const static auto previewData = dataset.getPreviewData(100);
-            auto numberOfRows = dataset.size();
+        if (ImGui::Begin("Dataset") && m_dataset != nullptr)
+        { // TODO: Se till så att preview data hämtas när datasetet laddas
+            const static auto previewData = m_dataset->getPreviewData(100);
+            auto numberOfRows = m_dataset->size();
             numberOfRows = numberOfRows >= 100 ? 100 : numberOfRows;
 
             if (showModelVectorsAsImage)
@@ -150,7 +177,6 @@ namespace VSOMExplorer
                     ImDrawList *draw_list = ImGui::GetWindowDrawList();
                     auto currentNeuron = previewData[n];
 
-
                     p.x += x_offset + width * step_size;
 
                     /* Draw actual image */
@@ -162,16 +188,16 @@ namespace VSOMExplorer
                         auto currentValue = scaleColorToUCharRange(currentNeuron[i], 255.f, 0.f);
 
                         draw_list->AddRectFilled(ImVec2(p.x + x, p.y + y),
-                                                ImVec2(p.x + x + step_size, p.y + y + step_size),
-                                                IM_COL32(currentValue, currentValue, currentValue, 255));
+                                                 ImVec2(p.x + x + step_size, p.y + y + step_size),
+                                                 IM_COL32(currentValue, currentValue, currentValue, 255));
                     }
 
                     /* Item list row wrap */
-                    float last_image_x2 = p.x + (modelVectorAsImageWidth*step_size + x_offset);
-                    float next_image_x2 = last_image_x2 + step_size*modelVectorAsImageWidth; // Expected position if next image was on same line
+                    float last_image_x2 = p.x + (modelVectorAsImageWidth * step_size + x_offset);
+                    float next_image_x2 = last_image_x2 + step_size * modelVectorAsImageWidth; // Expected position if next image was on same line
                     if (next_image_x2 > window_visible_x2)
                     {
-                        p.y += modelVectorAsImageHeight*step_size + y_offset;
+                        p.y += modelVectorAsImageHeight * step_size + y_offset;
                         p.x = original_p_x;
                     }
                 }
@@ -180,7 +206,7 @@ namespace VSOMExplorer
             {
                 static ImGuiTableFlags flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
                 static bool display_headers = true;
-                auto numberOfColumns = dataset.vectorLength();
+                auto numberOfColumns = m_dataset->vectorLength();
                 numberOfColumns = numberOfColumns >= 64 ? 64 : numberOfColumns;
 
                 if (ImGui::BeginTable("table1", numberOfColumns, flags))
@@ -188,7 +214,7 @@ namespace VSOMExplorer
                     if (display_headers)
                     {
                         for (size_t columnIndex{0}; columnIndex < numberOfColumns; ++columnIndex)
-                            ImGui::TableSetupColumn(dataset.getName(columnIndex).c_str());
+                            ImGui::TableSetupColumn(m_dataset->getName(columnIndex).c_str());
                         ImGui::TableHeadersRow();
                     }
 
@@ -211,10 +237,12 @@ namespace VSOMExplorer
         ImGui::End();
     }
 
-    static void RenderUMatrix(const UMatrix &uMatrix)
+    void Handler::RenderUMatrix()
     {
         if (ImGui::Begin("U-matrix"))
         {
+            auto uMatrix = m_som.getUMatrix();
+
             auto xSteps = uMatrix.getWidth();
             auto ySteps = uMatrix.getHeight();
             auto xStepSize = ImGui::GetWindowWidth() / xSteps;
@@ -237,7 +265,7 @@ namespace VSOMExplorer
                 {
                     auto unscaledValue = uMatrix.getValueAtIndex(xIndex, yIndex);
                     auto value = scaleColorToUCharRangeWithZoom(unscaledValue, maxValue, 0.f, static_cast<int>(upper), static_cast<int>(lower));
-                    
+
                     draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
                                                        ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255));
                 }
@@ -246,16 +274,16 @@ namespace VSOMExplorer
         ImGui::End();
     }
 
-    static void RenderWeigthMap(const Som &som)
+    void Handler::RenderWeigthMap()
     {
         if (ImGui::Begin("Weight Map"))
         {
-            auto xSteps = som.getWidth();
-            auto ySteps = som.getHeight();
+            auto xSteps = m_som.getWidth();
+            auto ySteps = m_som.getHeight();
             auto xStepSize = ImGui::GetWindowWidth() / xSteps;
             auto yStepSize = ImGui::GetWindowHeight() / ySteps;
 
-            auto weightMap = som.getWeigthMap();
+            auto weightMap = m_som.getWeigthMap();
             auto maxValue = weightMap.maxCoeff();
 
             ImDrawList *draw_list = ImGui::GetWindowDrawList();
@@ -271,9 +299,9 @@ namespace VSOMExplorer
             {
                 for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
                 {
-                    auto unscaledValue = weightMap[yIndex*xSteps + xIndex];
+                    auto unscaledValue = weightMap[yIndex * xSteps + xIndex];
                     auto value = scaleColorToUCharRangeWithZoom(unscaledValue, maxValue, 0.f, static_cast<int>(upper), static_cast<int>(lower));
-                    
+
                     draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
                                                        ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255));
                 }
@@ -282,16 +310,16 @@ namespace VSOMExplorer
         ImGui::End();
     }
 
-    static void RenderBmuHits(const Som &som)
+    void Handler::RenderBmuHits()
     {
         if (ImGui::Begin("BMU Hits"))
         {
-            auto xSteps = som.getWidth();
-            auto ySteps = som.getHeight();
+            auto xSteps = m_som.getWidth();
+            auto ySteps = m_som.getHeight();
             auto xStepSize = ImGui::GetWindowWidth() / xSteps;
             auto yStepSize = ImGui::GetWindowHeight() / ySteps;
 
-            auto bmuHits = som.getBmuHits();
+            auto bmuHits = m_som.getBmuHits();
             auto maxValue = *std::max_element(bmuHits.begin(), bmuHits.end());
 
             ImDrawList *draw_list = ImGui::GetWindowDrawList();
@@ -307,9 +335,9 @@ namespace VSOMExplorer
             {
                 for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
                 {
-                    auto unscaledValue = bmuHits[yIndex*xSteps + xIndex];
+                    auto unscaledValue = bmuHits[yIndex * xSteps + xIndex];
                     auto value = scaleColorToUCharRangeWithZoom(unscaledValue, maxValue, 0.f, static_cast<int>(upper), static_cast<int>(lower));
-                    
+
                     draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
                                                        ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255), IM_COL32(value, value, value, 255));
                 }
@@ -318,41 +346,41 @@ namespace VSOMExplorer
         ImGui::End();
     }
 
-    static void RenderMap(const Som &som, const DataSet &dataset)
+    void Handler::RenderMap()
     {
-        if (ImGui::Begin("Map"))
+        if (ImGui::Begin("Map") && m_dataset != nullptr)
         {
-            const auto featureNames = dataset.getNames();
+            const auto featureNames = m_dataset->getNames();
             // featureNames.push_back("None");
-            const auto noneIndex = featureNames.size() - 1;
+            // const auto noneIndex = featureNames.size() - 1;
 
-            static size_t currentRedColumnId = noneIndex;
-            static size_t currentGreenColumnId = noneIndex;
-            static size_t currentBlueColumnId = noneIndex;
-            
-            RenderCombo("Red Value", featureNames, &currentRedColumnId, dataset.getName(currentRedColumnId));
-            RenderCombo("Green Value", featureNames, &currentGreenColumnId, dataset.getName(currentGreenColumnId));
-            RenderCombo("Blue Value", featureNames, &currentBlueColumnId, dataset.getName(currentBlueColumnId));
-            
-            auto xSteps = som.getWidth();
-            auto ySteps = som.getHeight();
+            // m_currentRedColumnId = 0;
+            // m_currentGreenColumnId = 0;
+            // m_currentGreenColumnId = 0;
+
+            RenderCombo("Red Value", featureNames, &m_currentRedColumnId, m_dataset->getName(m_currentRedColumnId));
+            RenderCombo("Green Value", featureNames, &m_currentGreenColumnId, m_dataset->getName(m_currentGreenColumnId));
+            RenderCombo("Blue Value", featureNames, &m_currentBlueColumnId, m_dataset->getName(m_currentBlueColumnId));
+
+            auto xSteps = m_som.getWidth();
+            auto ySteps = m_som.getHeight();
             auto xStepSize = ImGui::GetContentRegionAvail().x / xSteps;
             auto yStepSize = ImGui::GetContentRegionAvail().y / ySteps;
 
-            auto maxRedValue = som.getMaxValueOfFeature(currentRedColumnId);
-            auto minRedValue = som.getMinValueOfFeature(currentRedColumnId);
-            auto maxGreenValue = som.getMaxValueOfFeature(currentGreenColumnId);
-            auto minGreenValue = som.getMinValueOfFeature(currentGreenColumnId);
-            auto maxBlueValue = som.getMaxValueOfFeature(currentBlueColumnId);
-            auto minBlueValue = som.getMinValueOfFeature(currentBlueColumnId);
+            auto maxRedValue = m_som.getMaxValueOfFeature(m_currentRedColumnId);
+            auto minRedValue = m_som.getMinValueOfFeature(m_currentRedColumnId);
+            auto maxGreenValue = m_som.getMaxValueOfFeature(m_currentGreenColumnId);
+            auto minGreenValue = m_som.getMinValueOfFeature(m_currentGreenColumnId);
+            auto maxBlueValue = m_som.getMaxValueOfFeature(m_currentBlueColumnId);
+            auto minBlueValue = m_som.getMinValueOfFeature(m_currentBlueColumnId);
 
             size_t hoverNeuronX{0}, hoverNeuronY{0};
 
-            if(ImGui::BeginChild("HoverMap"))
+            if (ImGui::BeginChild("HoverMap"))
             {
                 /* Hover neuron index */
-                hoverNeuronX = static_cast<size_t>((ImGui::GetMousePos().x - ImGui::GetCursorScreenPos().x - ImGui::GetScrollX())/xStepSize);
-                hoverNeuronY = static_cast<size_t>((ImGui::GetMousePos().y - ImGui::GetCursorScreenPos().y - ImGui::GetScrollY())/yStepSize);
+                hoverNeuronX = static_cast<size_t>((ImGui::GetMousePos().x - ImGui::GetCursorScreenPos().x - ImGui::GetScrollX()) / xStepSize);
+                hoverNeuronY = static_cast<size_t>((ImGui::GetMousePos().y - ImGui::GetCursorScreenPos().y - ImGui::GetScrollY()) / yStepSize);
 
                 ImDrawList *draw_list = ImGui::GetWindowDrawList();
 
@@ -362,21 +390,21 @@ namespace VSOMExplorer
                 {
                     for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
                     {
-                        auto modelVector = som.getNeuron(SomIndex{xIndex, yIndex});
+                        auto modelVector = m_som.getNeuron(SomIndex{xIndex, yIndex});
 
-                        auto redValue = modelVector[currentRedColumnId];
-                        auto greenValue = modelVector[currentGreenColumnId];
-                        auto blueValue = modelVector[currentBlueColumnId];
+                        auto redValue = modelVector[m_currentRedColumnId];
+                        auto greenValue = modelVector[m_currentGreenColumnId];
+                        auto blueValue = modelVector[m_currentBlueColumnId];
 
                         auto constrainedRedValue = scaleColorToUCharRange(redValue, maxRedValue, minRedValue);
                         auto constrainedGreenValue = scaleColorToUCharRange(greenValue, maxGreenValue, minGreenValue);
                         auto constrainedBlueValue = scaleColorToUCharRange(blueValue, maxBlueValue, minBlueValue);
 
                         draw_list->AddRectFilledMultiColor(ImVec2(p.x + xIndex * xStepSize, p.y + yIndex * yStepSize),
-                                                           ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize), 
-                                                           IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
-                                                           IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
-                                                           IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255), 
+                                                           ImVec2(p.x + (xIndex + 1) * xStepSize, p.y + (yIndex + 1) * yStepSize),
+                                                           IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255),
+                                                           IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255),
+                                                           IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255),
                                                            IM_COL32(constrainedRedValue, constrainedGreenValue, constrainedBlueValue, 255));
                     }
                 }
@@ -387,14 +415,14 @@ namespace VSOMExplorer
             /* Display model vector values in tooltip */
             if (ImGui::IsItemHovered())
             {
-                auto currentNeuron = som.getNeuron(som.getIndex(SomIndex{hoverNeuronX, hoverNeuronY}));
+                auto currentNeuron = m_som.getNeuron(m_som.getIndex(SomIndex{hoverNeuronX, hoverNeuronY}));
 
                 if (!showModelVectorsAsImage)
                 {
                     ImGui::BeginTooltip();
                     for (size_t i{0}; i < currentNeuron.size(); ++i)
                     {
-                        auto featureName = dataset.getName(i).c_str();
+                        auto featureName = m_dataset->getName(i).c_str();
 
                         ImGui::Text("%s:\t%.3f", featureName, currentNeuron[i]);
                     }
@@ -403,21 +431,21 @@ namespace VSOMExplorer
                 else if (showModelVectorsAsImage)
                 {
                     ImDrawList *draw_list = ImGui::GetForegroundDrawList();
-                    
+
                     for (size_t i{0}; i < currentNeuron.size(); ++i)
                     {
-                            const ImVec2 p = ImGui::GetMousePos();
+                        const ImVec2 p = ImGui::GetMousePos();
 
-                            const size_t width = modelVectorAsImageWidth, height = modelVectorAsImageWidth;
-                            const size_t x_offset = 10, y_offset = 20;
-                            const size_t x = i % width * 2 + x_offset;
-                            const size_t y = i / height * 2 + y_offset;
+                        const size_t width = modelVectorAsImageWidth, height = modelVectorAsImageWidth;
+                        const size_t x_offset = 10, y_offset = 20;
+                        const size_t x = i % width * 2 + x_offset;
+                        const size_t y = i / height * 2 + y_offset;
 
-                            auto currentValue = scaleColorToUCharRange(currentNeuron[i], 255.f, 0.f);
+                        auto currentValue = scaleColorToUCharRange(currentNeuron[i], 255.f, 0.f);
 
-                            draw_list->AddRectFilled(ImVec2(p.x + x, p.y + y),
-                                                     ImVec2(p.x + x + 2, p.y + y + 2),
-                                                     IM_COL32(currentValue, currentValue, currentValue, 255));
+                        draw_list->AddRectFilled(ImVec2(p.x + x, p.y + y),
+                                                 ImVec2(p.x + x + 2, p.y + y + 2),
+                                                 IM_COL32(currentValue, currentValue, currentValue, 255));
                     }
                 }
             }
@@ -425,41 +453,41 @@ namespace VSOMExplorer
         ImGui::End();
     }
 
-    static void RenderSigmaMap(const Som &som, const DataSet &dataset)
+    void Handler::RenderSigmaMap()
     {
-        if (ImGui::Begin("Sigma Map"))
+        if (ImGui::Begin("Sigma Map") && m_dataset != nullptr)
         {
-            auto featureNames = dataset.getNames();
+            auto featureNames = m_dataset->getNames();
             // featureNames.push_back("None");
-            const auto noneIndex = featureNames.size() - 1;
+            // const auto noneIndex = featureNames.size() - 1;
 
-            static size_t currentRedColumnId = noneIndex;
-            static size_t currentGreenColumnId = noneIndex;
-            static size_t currentBlueColumnId = noneIndex;
-            
-            RenderCombo("Red Value", featureNames, &currentRedColumnId, dataset.getName(currentRedColumnId));
-            RenderCombo("Green Value", featureNames, &currentGreenColumnId, dataset.getName(currentGreenColumnId));
-            RenderCombo("Blue Value", featureNames, &currentBlueColumnId, dataset.getName(currentBlueColumnId));
-            
-            auto xSteps = som.getWidth();
-            auto ySteps = som.getHeight();
+            // m_currentRedColumnId = 0;
+            // m_currentGreenColumnId = 0;
+            // m_currentGreenColumnId = 0;
+
+            RenderCombo("Red Value", featureNames, &m_currentRedColumnId, m_dataset->getName(m_currentRedColumnId));
+            RenderCombo("Green Value", featureNames, &m_currentGreenColumnId, m_dataset->getName(m_currentGreenColumnId));
+            RenderCombo("Blue Value", featureNames, &m_currentBlueColumnId, m_dataset->getName(m_currentBlueColumnId));
+
+            auto xSteps = m_som.getWidth();
+            auto ySteps = m_som.getHeight();
             auto xStepSize = ImGui::GetWindowWidth() / xSteps;
             auto yStepSize = ImGui::GetWindowHeight() / ySteps;
 
-            auto maxRedValue = som.getMaxSigmaOfFeature(currentRedColumnId);
-            auto minRedValue = som.getMinSigmaOfFeature(currentRedColumnId);
-            auto maxGreenValue = som.getMaxSigmaOfFeature(currentGreenColumnId);
-            auto minGreenValue = som.getMinSigmaOfFeature(currentGreenColumnId);
-            auto maxBlueValue = som.getMaxSigmaOfFeature(currentBlueColumnId);
-            auto minBlueValue = som.getMinSigmaOfFeature(currentBlueColumnId);
+            auto maxRedValue = m_som.getMaxSigmaOfFeature(m_currentRedColumnId);
+            auto minRedValue = m_som.getMinSigmaOfFeature(m_currentRedColumnId);
+            auto maxGreenValue = m_som.getMaxSigmaOfFeature(m_currentGreenColumnId);
+            auto minGreenValue = m_som.getMinSigmaOfFeature(m_currentGreenColumnId);
+            auto maxBlueValue = m_som.getMaxSigmaOfFeature(m_currentBlueColumnId);
+            auto minBlueValue = m_som.getMinSigmaOfFeature(m_currentBlueColumnId);
 
             size_t hoverNeuronX{0}, hoverNeuronY{0};
 
             if (ImGui::BeginChild("HoverSigmaMap"))
             {
                 /* Hover neuron index */
-                hoverNeuronX = static_cast<size_t>((ImGui::GetMousePos().x - ImGui::GetCursorScreenPos().x - ImGui::GetScrollX())/xStepSize);
-                hoverNeuronY = static_cast<size_t>((ImGui::GetMousePos().y - ImGui::GetCursorScreenPos().y - ImGui::GetScrollY())/yStepSize);
+                hoverNeuronX = static_cast<size_t>((ImGui::GetMousePos().x - ImGui::GetCursorScreenPos().x - ImGui::GetScrollX()) / xStepSize);
+                hoverNeuronY = static_cast<size_t>((ImGui::GetMousePos().y - ImGui::GetCursorScreenPos().y - ImGui::GetScrollY()) / yStepSize);
 
                 ImDrawList *draw_list = ImGui::GetWindowDrawList();
 
@@ -469,11 +497,11 @@ namespace VSOMExplorer
                 {
                     for (size_t xIndex{0}; xIndex < xSteps; ++xIndex)
                     {
-                        auto modelVector = som.getSigmaNeuron(SomIndex{xIndex, yIndex});
+                        auto modelVector = m_som.getSigmaNeuron(SomIndex{xIndex, yIndex});
 
-                        auto redValue = modelVector[currentRedColumnId];
-                        auto greenValue = modelVector[currentGreenColumnId];
-                        auto blueValue = modelVector[currentBlueColumnId];
+                        auto redValue = modelVector[m_currentRedColumnId];
+                        auto greenValue = modelVector[m_currentGreenColumnId];
+                        auto blueValue = modelVector[m_currentBlueColumnId];
 
                         auto constrainedRedValue = scaleColorToUCharRange(redValue, maxRedValue, minRedValue);
                         auto constrainedGreenValue = scaleColorToUCharRange(greenValue, maxGreenValue, minGreenValue);
@@ -494,15 +522,15 @@ namespace VSOMExplorer
             if (ImGui::IsItemHovered())
             {
                 auto index = SomIndex{hoverNeuronX, hoverNeuronY};
-                auto currentNeuron = som.getNeuron(index);
-                auto currentNeuronSigma = som.getSigmaNeuron(index);
+                auto currentNeuron = m_som.getNeuron(index);
+                auto currentNeuronSigma = m_som.getSigmaNeuron(index);
 
                 if (!showModelVectorsAsImage)
                 {
                     ImGui::BeginTooltip();
                     for (size_t i{0}; i < currentNeuron.size(); ++i)
                     {
-                        auto featureName = dataset.getName(i).c_str();
+                        auto featureName = m_dataset->getName(i).c_str();
 
                         ImGui::Text("%s:\t%.3f +- %.3f", featureName, currentNeuron[i], currentNeuronSigma[i]);
                     }
@@ -511,48 +539,49 @@ namespace VSOMExplorer
                 else if (showModelVectorsAsImage)
                 {
                     ImDrawList *draw_list = ImGui::GetForegroundDrawList();
-                    
+
                     for (size_t i{0}; i < currentNeuron.size(); ++i)
                     {
-                            const ImVec2 p = ImGui::GetMousePos();
+                        const ImVec2 p = ImGui::GetMousePos();
 
-                            const size_t width = modelVectorAsImageWidth, height = modelVectorAsImageWidth;
-                            const size_t x_offset = 10, y_offset = 20;
-                            const size_t x = i % width * 2 + x_offset;
-                            const size_t y = i / height * 2 + y_offset;
+                        const size_t width = modelVectorAsImageWidth, height = modelVectorAsImageWidth;
+                        const size_t x_offset = 10, y_offset = 20;
+                        const size_t x = i % width * 2 + x_offset;
+                        const size_t y = i / height * 2 + y_offset;
 
-                            auto currentValue = scaleColorToUCharRange(currentNeuronSigma[i], 255.f, 0.f);
+                        auto currentValue = scaleColorToUCharRange(currentNeuronSigma[i], 255.f, 0.f);
 
-                            draw_list->AddRectFilled(ImVec2(p.x + x, p.y + y),
-                                                     ImVec2(p.x + x + 2, p.y + y + 2),
-                                                     IM_COL32(currentValue, currentValue, currentValue, 255));
+                        draw_list->AddRectFilled(ImVec2(p.x + x, p.y + y),
+                                                 ImVec2(p.x + x + 2, p.y + y + 2),
+                                                 IM_COL32(currentValue, currentValue, currentValue, 255));
                     }
                 }
             }
-
         }
         ImGui::End();
     }
 
-    void SomHandler(Som &som, DataSet &dataset)
+    void Handler::SomHandler()
     {
         static std::thread trainingThread;
-        auto currentlyTraining = som.isTraining();
+        auto currentlyTraining = m_som.isTraining();
         if (ImGui::Begin("SOM"))
         {
-            if(currentlyTraining) ImGui::BeginDisabled(true);
+            if (currentlyTraining)
+                ImGui::BeginDisabled(true);
             {
-                static int width = som.getWidth();
-                static int height = som.getHeight();
+                static int width = m_som.getWidth();
+                static int height = m_som.getHeight();
                 ImGui::Text("SOM");
                 ImGui::InputInt("Width", &width);
                 ImGui::InputInt("Height", &height);
-                if (ImGui::Button("Create"))
-                    som = Som(width, height, dataset.vectorLength());
+                if (ImGui::Button("Create") && m_dataset != nullptr)
+                    m_som = Som(width, height, m_dataset->vectorLength());
                 static float initSigma = 1.0f;
                 ImGui::InputFloat("Init variance", &initSigma);
-                if(ImGui::Button("Randomly initialize")) som.randomInitialize((unsigned)(time(NULL)+clock()), initSigma);
-                
+                if (ImGui::Button("Randomly initialize"))
+                    m_som.randomInitialize((unsigned)(time(NULL) + clock()), initSigma);
+
                 static int numberOfEpochs = 100;
                 static double eta0 = 0.9;
                 static double etaDecay = 0.01;
@@ -561,8 +590,8 @@ namespace VSOMExplorer
 
                 // ImGui::InputInt("Number of epochs", numberOfEpochs);
                 static int elem = static_cast<std::underlying_type_t<Som::WeigthDecayFunction>>(Som::WeigthDecayFunction::Exponential);
-                const char* elems_names[3] = { "Exponential", "Inverse proportional", "Batch Map" };
-                const char* elem_name = (elem >= 0 && elem < 3) ? elems_names[elem] : "Unknown";
+                const char *elems_names[3] = {"Exponential", "Inverse proportional", "Batch Map"};
+                const char *elem_name = (elem >= 0 && elem < 3) ? elems_names[elem] : "Unknown";
                 ImGui::SliderInt("Weight decay function", &elem, 0, 2, elem_name);
 
                 ImGui::SliderInt("Number of epochs", &numberOfEpochs, 1, 1000);
@@ -574,10 +603,10 @@ namespace VSOMExplorer
                 ImGui::InputDouble("Sigma0", &sigma0);
                 ImGui::InputDouble("Sigma decay", &sigmaDecay);
                 // #include <type_traits>
-                
-                if (ImGui::Button("Train"))
+
+                if (ImGui::Button("Train") && m_dataset != nullptr)
                 {
-                    trainingThread = std::thread(&Som::train, std::ref(som), std::ref(dataset), static_cast<size_t>(numberOfEpochs), eta0, etaDecay, sigma0, sigmaDecay, static_cast<Som::WeigthDecayFunction>(elem), true);
+                    trainingThread = std::thread(&Som::train, std::ref(m_som), std::ref(*m_dataset), static_cast<size_t>(numberOfEpochs), eta0, etaDecay, sigma0, sigmaDecay, static_cast<Som::WeigthDecayFunction>(elem), true);
                     trainingThread.detach();
                 }
                 if (currentlyTraining)
@@ -585,68 +614,83 @@ namespace VSOMExplorer
                     ImGui::SameLine();
                     ImGui::Text("Training SOM...");
                 }
-                
             }
-            if(currentlyTraining) ImGui::EndDisabled();
-
-
+            if (currentlyTraining)
+                ImGui::EndDisabled();
         }
         ImGui::End();
     }
 
-    void MetricsViewer(Som &som)
+    void Handler::MetricsViewer()
     {
         if (ImGui::Begin("Metrics"))
         {
             {
-                const std::lock_guard<std::mutex> lock(som.metricsMutex);
-                auto metrics = som.getMetrics();
+                const std::lock_guard<std::mutex> lock(m_som.metricsMutex);
+                auto metrics = m_som.getMetrics();
                 auto maxValue = std::max_element(metrics.MeanSquaredError.begin(), metrics.MeanSquaredError.end());
                 ImGui::PlotLines("Mean Squared Training Error", metrics.MeanSquaredError.data(), metrics.MeanSquaredError.size(), 0, nullptr, 0.0f, *maxValue, ImVec2(0, 80.0f));
             }
-
         }
         ImGui::End();
     }
 
-    void SettingsPane()
+    void Handler::SettingsPane()
     {
-        if(ImGui::Begin("Settings"))
+        if (ImGui::Begin("Settings"))
         {
             ImGui::Text("Display");
             ImGui::Checkbox("Show model vectors as image", &showModelVectorsAsImage);
 
-            if(showModelVectorsAsImage)
+            if (showModelVectorsAsImage)
             {
                 ImGui::InputInt("Image width", &modelVectorAsImageWidth);
                 ImGui::InputInt("Image height", &modelVectorAsImageHeight);
             }
-            if(modelVectorAsImageHeight < 0) modelVectorAsImageHeight = 0;
-            if(modelVectorAsImageWidth < 0) modelVectorAsImageWidth = 0;
+            if (modelVectorAsImageHeight < 0)
+                modelVectorAsImageHeight = 0;
+            if (modelVectorAsImageWidth < 0)
+                modelVectorAsImageWidth = 0;
         }
         ImGui::End();
     }
 
-    void RenderExplorer(Som &som, DataSet &dataset)
+    void Handler::SetDataset(std::unique_ptr<DataSet> dataset)
+    {
+        m_dataset = std::unique_ptr<DataSet>{std::move(dataset)};
+        m_som = Som(10, 10, m_dataset->vectorLength());
+    }
+
+    void Handler::RenderExplorer()
     {
         ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 
-        LoadMainMenu();
+        try
+        {
+            LoadMainMenu();
 
-        SomHandler(som, dataset);
-        SettingsPane();
+            SomHandler();
+            SettingsPane();
 
-        DatasetViewer(dataset);
-        DatasetEditor(dataset);
+            DatasetViewer();
+            DatasetEditor();
 
-        RenderUMatrix(som.getUMatrix());
-        RenderWeigthMap(som);
-        RenderBmuHits(som);
+            RenderUMatrix();
+            RenderWeigthMap();
+            RenderBmuHits();
 
-        MetricsViewer(som);
+            MetricsViewer();
 
-        RenderMap(som, dataset);
-        RenderSigmaMap(som, dataset);
-
+            RenderMap();
+            RenderSigmaMap();
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << e.what() << '\n';
+        }
+        catch(...)
+        {
+            ;
+        }
     }
 }
